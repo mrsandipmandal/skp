@@ -1,0 +1,1 @@
+[17-Aug-2023 06:06:28 UTC] PHP Fatal error:  Namespace declaration statement has to be the very first statement or after any declare call in the script in /home/chhcourtcop/public_html/master/app/Http/Controllers/UtilityLoanController.php on line 3
