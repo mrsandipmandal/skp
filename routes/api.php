@@ -21,4 +21,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Create Order
     Route::post('/create-order', [ApiController::class,'create_order']);
+
+    // Order List
+    Route::get('/order-list', [ApiController::class,'order_list']);
+
 });

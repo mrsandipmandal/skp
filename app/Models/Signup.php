@@ -12,7 +12,7 @@ class Signup extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable;
     protected $table = "main_signup";
-    protected $primaryKey = "sl";
+    // protected $primaryKey = "sl";
 
     // public function getSalon()
     // {

@@ -101,7 +101,7 @@ class Helper
 
     public static function Act($model = '', $upload_field = '', $update_value = null, $id = '')
     {
-        return $model::where('sl', $id)->update([$upload_field => $update_value]);
+        return $model::where('id', $id)->update([$upload_field => $update_value]);
     }
 
     public static function deleteFileFromUrl($url)

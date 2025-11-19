@@ -14,7 +14,7 @@ return new class extends Migration
     public function up()
     {
         Schema::create('main_signup', function (Blueprint $table) {
-            $table->id("sl");
+            $table->id();
             $table->string('username')->unique();
             $table->text('password');
             $table->text('pass');

@@ -3,11 +3,14 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
+
 use App\Models\Signup;
 use App\Models\Order;
-use Carbon\Carbon;
 use App\Helpers\Helper;
 use App\Helpers\GoogleImageUpload;
+
+use Carbon\Carbon;
 
 class ApiController extends Controller
 {
@@ -93,21 +96,31 @@ class ApiController extends Controller
     /* -------------------------- CREATE ORDER --------------------------- */
     public function create_order(Request $request)
     {
-        $request->validate([
-            "customer_id" => "required",
-            "order_type" => "required",
-            "note" => "nullable",
-            "file" => "nullable|file|max:2048|mimes:jpg,jpeg,png",
+        $err = false;
+        $validator = Validator::make($request->all(), [
+            "order_type" => "required|string",
+            "note" => "nullable|string",
+            "file" => "nullable|file|max:5072|mimes:jpg,jpeg,png,webp",
         ]);
+        if ($validator->fails()) {
+            $err = true;
+            $resp['error'] = true;
+            $resp['message'] = $validator->errors()->all();
+        }
 
         $order_number = Helper::GenerateUniqueId('Order', 8, 'ORD');
         $order = new Order();
         $order->order_number = $order_number;
-        $order->customer_id = $request->customer_id;
+        // Use the authenticated user as the customer. Ensure route is protected with auth middleware.
+        $user = $request->user();
+        if (!$user) {
+            return response()->json(['error' => true, 'message' => 'Unauthenticated'], 401);
+        }
+        $order->customer_id = $user->id;
         $order->note = $request->note;
         $order->order_type = $request->order_type;
 
-        // Handle image upload
+        // Handle image upload to Google Drive
         $image_path = null;
         if ($request->hasFile('file')) {
             try {
@@ -128,12 +141,26 @@ class ApiController extends Controller
         return response()->json([
             'error' => false,
             'message' => 'Order created successfully',
-            'data' => [
-                'order_id' => $order->id,
-                'order_number' => $order->order_number,
-                'image_url' => $image_path
-            ]
+            'data' => $order
         ]);
     }
+
+    /* -------------------------- ORDER LIST --------------------------- */
+    public function order_list(Request $request)
+    {
+        // Use authenticated user to list their orders.
+        $user = $request->user();
+        if (!$user) {
+            return response()->json(['error' => true, 'message' => 'Unauthenticated'], 401);
+        }
+
+        $orders = Order::where('customer_id', $user->id)->get();
+        return response()->json([
+            'error' => false,
+            'message' => 'Order List',
+            'data' => $orders
+        ]);
+    }
+
 
 }

@@ -52,7 +52,7 @@ class AdminController extends Controller
                     $resp['error'] = false;
                     session([
                         'isLoged' => true,
-                        'usersl' => $users->sl,
+                        'userid' => $users->id,
                         'username' => $users->username,
                         'userlevel' => $users->userlevel,
                         'mobile' => $users->mobile,
@@ -90,7 +90,7 @@ class AdminController extends Controller
                 'password_confirmation' => 'required|min:6'
             ]
         );
-        $user = Signup::find(session()->get("usersl"));
+        $user = Signup::find(session()->get("userid"));
         if ($user->password == md5($request->oldpass)) {
             $user->password = md5($request->password);
             $user->save();
