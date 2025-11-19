@@ -7,8 +7,9 @@ use Illuminate\Support\Facades\Validator;
 
 use App\Models\Signup;
 use App\Models\Order;
+use App\Models\DeliveryType;
+
 use App\Helpers\Helper;
-use App\Helpers\GoogleImageUpload;
 
 use Carbon\Carbon;
 
@@ -93,40 +94,51 @@ class ApiController extends Controller
         ]);
     }
 
+    /* -------------------------- DELIVERY TYPE -------------------------- */
+    public function delivery_type(Request $request)
+    {
+        $deliveryTypes = DeliveryType::where('stat', 0)->select('id', 'name')->get();
+        return response()->json([
+            'error' => false,
+            'message' => 'Delivery Type',
+            'data' => $deliveryTypes
+        ]);
+    }
+
     /* -------------------------- CREATE ORDER --------------------------- */
     public function create_order(Request $request)
     {
-        $err = false;
         $validator = Validator::make($request->all(), [
-            "order_type" => "required|string",
+            "customer_id" => "required",
+            "order_type" => "required",
             "note" => "nullable|string",
             "file" => "nullable|file|max:5072|mimes:jpg,jpeg,png,webp",
         ]);
         if ($validator->fails()) {
-            $err = true;
-            $resp['error'] = true;
-            $resp['message'] = $validator->errors()->all();
+            return response()->json([
+                'error' => true,
+                'message' => $validator->errors()->all()
+            ], 422);
         }
 
         $order_number = Helper::GenerateUniqueId('Order', 8, 'ORD');
         $order = new Order();
         $order->order_number = $order_number;
         // Use the authenticated user as the customer. Ensure route is protected with auth middleware.
-        $user = $request->user();
+        /* $user = $request->user();
         if (!$user) {
             return response()->json(['error' => true, 'message' => 'Unauthenticated'], 401);
-        }
-        $order->customer_id = $user->id;
+        } */
+        $order->customer_id = $request->customer_id;
         $order->note = $request->note;
         $order->order_type = $request->order_type;
 
-        // Handle image upload to Google Drive
+        // Handle image upload locally into public/Uploads/Orders/<YYYYMM>/
         $image_path = null;
         if ($request->hasFile('file')) {
             try {
-                $uploader = GoogleImageUpload::gAuthorized();
-                $result = $uploader->upload($request->file('file'), 'Orders');
-                $image_path = $result['preview_url'];
+                $result = Helper::storeFileInDatedFolder($request->file('file'), 'Orders');
+                $image_path = $result['url'] ?? $result['path'] ?? null;
             } catch (\Exception $e) {
                 return response()->json([
                     'error' => true,
@@ -148,13 +160,30 @@ class ApiController extends Controller
     /* -------------------------- ORDER LIST --------------------------- */
     public function order_list(Request $request)
     {
-        // Use authenticated user to list their orders.
-        $user = $request->user();
-        if (!$user) {
-            return response()->json(['error' => true, 'message' => 'Unauthenticated'], 401);
+        $validator = Validator::make($request->all(), [
+            "customer_id" => "required",
+            "stat" => "nullable"
+        ]);
+        if ($validator->fails()) {
+            return response()->json([
+                'error' => true,
+                'message' => $validator->errors()->all()
+            ], 422);
         }
 
-        $orders = Order::where('customer_id', $user->id)->get();
+        $orders = Order::query();
+        $orders->where('customer_id', $request->customer_id);
+        if ($request->filled('stat')) {
+            $orders->where('stat', $request->stat);
+        }
+        $orders = $orders->get();
+
+        if ($orders->isEmpty()) {
+            return response()->json([
+                'error' => true,
+                'message' => 'Does not have any Order'
+            ]);
+        }
         return response()->json([
             'error' => false,
             'message' => 'Order List',

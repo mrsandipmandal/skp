@@ -349,13 +349,6 @@ class Helper
         $edit_logs->save();
     }
 
-    /* public static function getData($table, $field, $whereField, $whereValue)
-    {
-        $result = DB::table($table)
-            ->where($whereField, $whereValue)
-            ->value($field);
-        return $result;
-    } */
     public static function getData($table, $field, $whereField, $whereValue)
     {
         $query = DB::table($table);
@@ -389,11 +382,8 @@ class Helper
             throw new \Exception("Invalid file type. Allowed types: " . implode(', ', $allowedExtensions));
         }
 
-        // Ensure path exists inside public directory
-        $destinationPath = public_path($path);
-
-        // Use Laravel's directory creation method with proper permissions
-        File::makeDirectory($destinationPath, 0755, true, true);
+        // Ensure path is normalized (relative to disk)
+        $diskPath = trim($path, '/');
 
         // Generate filename
         if ($customName) {
@@ -405,25 +395,64 @@ class Helper
             $fileName = Str::random(20) . '.' . $extension;
         }
 
-        // Prevent filename conflicts
-        // $counter = 1;
-        // $originalFileName = $fileName;
-        // while (File::exists($destinationPath . '/' . $fileName)) {
-        //     $fileName = pathinfo($originalFileName, PATHINFO_FILENAME)
-        //         . '_' . $counter++
-        //         . '.' . $extension;
-        // }
-
         try {
-            // Move file with error handling
-            $file->move($destinationPath, $fileName);
+            // Store file on the public disk using stream
+            $relativePath = ($diskPath ? $diskPath . '/' : '') . $fileName;
+            $stream = fopen($file->getRealPath(), 'r');
+            Storage::disk('public')->put($relativePath, $stream);
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
 
-            // Return full path
-            return "$path/$fileName";
+            // Return relative storage path
+            return $relativePath;
         } catch (\Exception $e) {
             // Log the error
             Log::error('File upload failed: ' . $e->getMessage());
             return null;
+        }
+    }
+
+    public static function storeFileInDatedFolder($file, $baseFolder = 'uploads', $allowedExtensions = null)
+    {
+        if (!$file || !$file->isValid()) {
+            throw new \Exception('Invalid file upload');
+        }
+
+        $extension = strtolower($file->getClientOriginalExtension());
+
+        if ($allowedExtensions === null) {
+            $allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'doc', 'docx'];
+        }
+
+        if (!in_array($extension, $allowedExtensions)) {
+            throw new \Exception('Invalid file type.');
+        }
+
+        $dateFolder = date('Ym'); // e.g. 202511
+        $relativeFolder = 'Uploads/' . trim($baseFolder, '/') . '/' . $dateFolder;
+        $destinationPath = public_path($relativeFolder);
+
+        // Ensure directory exists
+        File::makeDirectory($destinationPath, 0755, true, true);
+
+        // Create a unique filename
+        $fileName = time() . '_' . Str::random(12) . '.' . $extension;
+
+        try {
+            $stream = fopen($file->getRealPath(), 'r');
+            Storage::disk('public')->put($relativeFolder . '/' . $fileName, $stream);
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
+
+            $relativePath = $relativeFolder . '/' . $fileName;
+            $url = Storage::disk('public')->url($relativePath);
+
+            return ['path' => $relativePath, 'url' => $url];
+        } catch (\Exception $e) {
+            Log::error('Dated file upload failed: ' . $e->getMessage());
+            throw $e;
         }
     }
 
@@ -433,39 +462,33 @@ class Helper
         if (!$files || !is_array($files)) {
             return null;
         }
-
-        // Define user-specific folder
-        $userPath = $path . '/' . $userId;
-        $destinationPath = public_path($userPath);
-
-        // Ensure directory exists with proper permissions
-        File::makeDirectory($destinationPath, 0755, true, true);
+        // Define user-specific folder relative to storage public disk
+        $userPath = trim($path, '/') . '/' . $userId;
 
         $uploadedFiles = [];
 
         foreach ($files as $file) {
             if ($file->isValid()) {
                 try {
-                    $uploadedFile = self::imageUpload(
-                        $file,
-                        $userPath,
-                        null,
-                        $allowedExtensions ?? ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'doc', 'docx']
-                    );
+                    $extension = strtolower($file->getClientOriginalExtension());
+                    $fileName = Str::random(20) . '.' . $extension;
 
-                    if ($uploadedFile) {
-                        $uploadedFiles[] = $uploadedFile;
+                    $relativePath = trim($userPath, '/') . '/' . $fileName;
+                    $stream = fopen($file->getRealPath(), 'r');
+                    Storage::disk('public')->put($relativePath, $stream);
+                    if (is_resource($stream)) {
+                        fclose($stream);
                     }
+
+                    $uploadedFiles[] = $relativePath;
                 } catch (\Exception $e) {
-                    // Log individual file upload errors
                     Log::error('Multiple file upload failed: ' . $e->getMessage());
                 }
             }
         }
 
-        // Return array of uploaded file paths or null if no files uploaded
-        // return !empty($uploadedFiles) ? $uploadedFiles : null; // save array of uploaded file paths
-        return !empty($userPath) ? $userPath : null; // save directory path
+        // Return the storage directory path (relative) if any uploads happened, else null
+        return !empty($uploadedFiles) ? $userPath : null;
     }
 
     public static function getMultipleImagesPath($path = null)
@@ -473,53 +496,51 @@ class Helper
         if (!$path) {
             return [];
         }
-
-        // Ensure path starts without a leading slash
         $path = trim($path, '/');
-        $destinationPath = public_path($path);
 
-        if (!File::exists($destinationPath)) {
-            Log::error("Path does not exist: " . $destinationPath);
+        if (!Storage::disk('public')->exists($path)) {
+            Log::error("Path does not exist on storage disk: " . $path);
             return [];
         }
 
-        $files = File::files($destinationPath);
+        $files = Storage::disk('public')->files($path);
 
-        $relativePaths = array_map(function ($file) use ($path) {
-            // Use the original path to create relative paths
-            return '/' . $path . '/' . basename($file);
+        $urls = array_map(function ($file) {
+            return Storage::disk('public')->url($file);
         }, $files);
 
-        return $relativePaths;
+        return $urls;
     }
 
     public static function multipleFileDeleteFromUrl($url)
     {
         try {
-            // Validate and sanitize path
-            $path = parse_url($url, PHP_URL_PATH);
-            $path = ltrim($path, '/');
-
-            // Ensure path is within allowed directory
-            $fullPath = public_path($path);
-
-            if (!Str::startsWith($fullPath, public_path())) {
-                throw new \Exception('Invalid path');
+            // Accept either a full URL or a storage-relative path
+            if (filter_var($url, FILTER_VALIDATE_URL)) {
+                $path = parse_url($url, PHP_URL_PATH);
+                // If URL uses the /storage/ prefix, strip it
+                if (strpos($path, '/storage/') === 0) {
+                    $path = substr($path, strlen('/storage/'));
+                } else {
+                    $path = ltrim($path, '/');
+                }
+            } else {
+                $path = ltrim($url, '/');
             }
 
-            if (is_dir($fullPath)) {
-                $files = File::files($fullPath);
+            // Normalize
+            $path = trim($path, '/');
 
-                foreach ($files as $file) {
-                    if (is_file($file)) {
-                        File::delete($file);
-                    }
-                }
-
-                // Optionally remove the directory
-                File::deleteDirectory($fullPath);
-
+            // If directory exists (has files), delete directory
+            $files = Storage::disk('public')->files($path);
+            if (!empty($files)) {
+                Storage::disk('public')->deleteDirectory($path);
                 return true;
+            }
+
+            // Otherwise, try deleting single file
+            if (Storage::disk('public')->exists($path)) {
+                return Storage::disk('public')->delete($path);
             }
 
             return false;
@@ -531,27 +552,23 @@ class Helper
 
     public static function multipleImagesPath($path, $baseUrl)
     {
-        // Validate inputs
-        if (!$path || !$baseUrl) {
+        if (!$path) {
             return [];
         }
 
-        // Ensure path is within public directory
-        $fullPath = public_path($path);
+        $path = trim($path, '/');
 
-        if (!is_dir($fullPath)) {
+        if (!Storage::disk('public')->exists($path)) {
             return [];
         }
 
         $images = [];
-        $files = File::files($fullPath);
+        $files = Storage::disk('public')->files($path);
 
         foreach ($files as $file) {
-            // Validate file is an image
-            $mimeType = mime_content_type($file);
+            $mimeType = Storage::disk('public')->mimeType($file);
             if (strpos($mimeType, 'image/') === 0) {
-                $relativePath = str_replace(public_path(), '', $file);
-                $images[] = rtrim($baseUrl, '/') . $relativePath;
+                $images[] = Storage::disk('public')->url($file);
             }
         }
 

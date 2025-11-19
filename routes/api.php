@@ -19,6 +19,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/dashboard', [ApiController::class,'dashboard']);
     Route::post('/logoff', [ApiController::class,'logoff']);
 
+    // Delivery Type
+    Route::get('/delivery-type', [ApiController::class,'delivery_type']);
+
     // Create Order
     Route::post('/create-order', [ApiController::class,'create_order']);
 

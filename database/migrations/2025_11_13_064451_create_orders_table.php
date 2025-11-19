@@ -20,7 +20,7 @@ return new class extends Migration
             $table->text('note')->nullable();
             $table->text('image_path')->nullable();
             $table->string('order_type', 150)->nullable(); // 'Self Pickup','Delivery'
-            $table->tinyInteger('stat')->default(0); // 0: Pending, 1: 'Received', 2 : 'Prepared', 3: completed, 4: cancelled
+            $table->tinyInteger('stat')->default(0)->comment('0: Pending, 1: Received, 2 : Prepared, 3: completed, 4: cancelled');
             $table->string('received_by', 150)->nullable();
             $table->date('received_dtm')->nullable();
             $table->text('received_note')->nullable();
