@@ -8,29 +8,7 @@ use Google\Service\Drive\Permission;
 
 /**
  * GoogleImageUpload - Single unified helper for Google Drive image uploads
- *
- * Handles:
- * - OAuth authorization and token management
- * - Image upload to Google Drive
- * - Public sharing and URL generation
- * - Preview/thumbnail URLs
- *
- * Usage:
- *   $uploader = new GoogleImageUpload(
- *       env('GOOGLE_CREDENTIALS_PATH'),
- *       env('GOOGLE_TOKEN_PATH'),
- *       env('GOOGLE_REDIRECT_URI')
- *   );
- *
- *   // Check if authorized
- *   if ($uploader->isAuthorized()) {
- *       $result = $uploader->upload($request->file('image'), 'MyFolder');
- *       echo $result['view_url'];   // Public view link
- *       echo $result['preview_url']; // Preview image
- *   } else {
- *       return redirect($uploader->getAuthUrl());
- *   }
- */
+**/
 class GoogleImageUpload
 {
     protected $client;
@@ -38,6 +16,8 @@ class GoogleImageUpload
     protected $credentialsPath;
     protected $tokenPath;
     protected $redirectUri;
+    protected $rootFolderId = '1YPTh5Ae7BMIIbbDyMQPrTB0ziNEwxDZn'; // Default root folder
+    protected $projectFolderName = 'KSP';
 
     /**
      * Resolve a storage path to an absolute path
@@ -61,8 +41,16 @@ class GoogleImageUpload
         return $path;
     }
 
-    public function __construct($credentialsPath, $tokenPath, $redirectUri)
+    public function __construct($credentialsPath, $tokenPath, $redirectUri, $rootFolderId = null, $projectFolderName = null)
     {
+        if ($rootFolderId) {
+            $this->rootFolderId = $rootFolderId;
+        }
+
+        if ($projectFolderName) {
+            $this->projectFolderName = $projectFolderName;
+        }
+
         $this->credentialsPath = $this->resolvePath($credentialsPath);
         $this->tokenPath = $this->resolvePath($tokenPath);
 
@@ -137,8 +125,6 @@ class GoogleImageUpload
 
     /**
      * Get Google OAuth authorization URL
-     *
-     * @return string Authorization URL
      */
     public function getAuthUrl()
     {
@@ -147,9 +133,6 @@ class GoogleImageUpload
 
     /**
      * Handle OAuth callback - exchange code for token
-     *
-     * @param string $code Authorization code from Google
-     * @return array ['success' => bool, 'message' => string]
      */
     public function authorize($code)
     {
@@ -173,8 +156,6 @@ class GoogleImageUpload
 
     /**
      * Check if user is authorized
-     *
-     * @return bool
      */
     public function isAuthorized()
     {
@@ -183,11 +164,6 @@ class GoogleImageUpload
 
     /**
      * Upload image to Google Drive
-     *
-     * @param mixed $file File path (string), $_FILES array, or Laravel UploadedFile
-     * @param string $folder Target folder name
-     * @return array Upload result with URLs
-     * @throws \Exception
      */
     public function upload($file, $folder = 'Images')
     {
@@ -209,13 +185,23 @@ class GoogleImageUpload
             throw new \Exception('Invalid file input');
         }
 
-        // Create or get folder
-        $folderId = $this->getOrCreateFolder($folder);
+        // Ensure folder chain: <rootFolderId> / <projectFolderName> / <dynamic folder provided by caller>
+        $rootFolderId = $this->rootFolderId;
+        $projectFolderId = $this->getOrCreateFolder($this->projectFolderName, $rootFolderId);
+
+        // If caller provided a folder name, create/get it under project folder, otherwise use project folder itself
+        if (!empty($folder)) {
+            $targetFolderId = $this->getOrCreateFolder($folder, $projectFolderId);
+            $fullFolderPath = $this->projectFolderName . '/' . $folder;
+        } else {
+            $targetFolderId = $projectFolderId;
+            $fullFolderPath = $this->projectFolderName;
+        }
 
         // Upload file
         $fileMetadata = new Drive\DriveFile([
             'name' => $fileName,
-            'parents' => [$folderId]
+            'parents' => [$targetFolderId]
         ]);
 
         $uploadedFile = $this->service->files->create($fileMetadata, [
@@ -249,10 +235,39 @@ class GoogleImageUpload
 
     /**
      * Create or get folder in Google Drive
-     *
-     * @param string $folderName
-     * @param string|null $parentId
-     * @return string Folder ID
+    */
+    public function createFolder($folderPath)
+    {
+        if (!$this->isAuthorized()) {
+            throw new \Exception('Not authorized. Call authorize() first.');
+        }
+
+        // Split path into folder names
+        $folderNames = array_filter(explode('/', trim($folderPath, '/')));
+
+        if (empty($folderNames)) {
+            throw new \Exception('Folder path cannot be empty.');
+        }
+
+        // Start from root folder
+        $currentParentId = $this->rootFolderId;
+        $createdFolders = [];
+
+        // Create each folder in the path
+        foreach ($folderNames as $folderName) {
+            $currentParentId = $this->getOrCreateFolder($folderName, $currentParentId);
+            $createdFolders[] = $folderName;
+        }
+
+        return [
+            'path' => implode('/', $createdFolders),
+            'folder_id' => $currentParentId,
+            'message' => 'Folder(s) created successfully.'
+        ];
+    }
+
+    /**
+     * Create or get folder in Google Drive
      */
     protected function getOrCreateFolder($folderName, $parentId = null)
     {

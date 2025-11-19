@@ -152,7 +152,7 @@ class ApiController extends Controller
                     ], 400);
                 }
 
-                $result = $uploader->upload($request->file('file'), 'Orders');
+                $result = $uploader->upload($request->file('file'), 'Uploads/SKP/Orders');
                 $image_path = $result['preview_url'];
             } catch (\Exception $e) {
                 return response()->json([

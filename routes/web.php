@@ -36,6 +36,11 @@ Route::middleware(['isLogged'])->group(function () {
         Route::post('/person/edit', 'Person_Edit')->name('Person.Edit');
         Route::get('/customer-list', 'CustomerList')->name('Customer.List');
 
+        Route::get('/terms-entry', 'Terms_Entry')->name('Terms.Entry');
+        Route::post('/terms-entry', 'Terms_Entrys')->name('Terms.Store');
+        Route::post('/terms/status', 'Terms_Status')->name('Terms.Status');
+        Route::post('/terms/edit', 'Terms_Edit')->name('Terms.Edit');
+
 
     });
 

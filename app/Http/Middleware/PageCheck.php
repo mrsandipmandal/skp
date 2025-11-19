@@ -57,6 +57,8 @@ class PageCheck
             or $request->is("menu-status-update")
             or $request->is("person/status")
             or $request->is("person/edit")
+            or $request->is("terms/status")
+            or $request->is("terms/edit")
             or $request->is("customer-list")
            
         ) {

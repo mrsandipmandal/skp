@@ -14,6 +14,7 @@
         z-index: 2000 !important;
     }
 </style>
+
 @section('main_body')
     <div class="content-wrapper">
         <!-- Content -->
@@ -75,21 +76,21 @@
 
                         <h5 class="card-header">{{ $page_title ?? 'State' }} List</h5>
                         <div class="table-responsive text-nowrap">
-                        
+
 
                             <table class="table table-hover table-auto table-striped"
                                 style="width: 100%; overflow: auto;">
                                 <thead>
                                     <tr>
                                         <th>#</th>
-                                      
+
                                         <th>Name</th>
                                         <th>Mobile</th>
                                         <th>Email</th>
                                         @if (Helper::checkPermission('is_active'))
                                             <th>Status</th>
                                         @endif
-                                       
+
                                     </tr>
                                 </thead>
                                 <tbody class="table-border-bottom-0">
@@ -99,7 +100,7 @@
                                                 {{ $loop->iteration }}
                                             </td>
 
-                                      
+
                                             <td>{{ $row->name }}</td>
                                             <td>{{ $row->mobile }}</td>
                                             <td>{{ $row->email }}</td>
@@ -117,7 +118,7 @@
                                                     @endif
                                                 </td>
                                             @endif
-                                       
+
                                         </tr>
                                     @endforeach
                                 </tbody>
