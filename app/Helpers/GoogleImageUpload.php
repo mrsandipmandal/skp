@@ -20,6 +20,32 @@ class GoogleImageUpload
     protected $projectFolderName = 'KSP';
 
     /**
+     * Static factory method - Create and return an authorized uploader instance.
+     * Throws exception if not authorized (token file missing).
+     *
+     * Usage in controller:
+     *   $uploader = GoogleImageUpload::gAuthorized();
+     *   $result = $uploader->upload($request->file('image'), 'MyFolder');
+     *
+     */
+
+    public static function gAuthorized($credentialsPath = null, $tokenPath = null, $redirectUri = null, $rootFolderId = null, $projectFolderName = null)
+    {
+        $credentialsPath = $credentialsPath ?? env('GOOGLE_CREDENTIALS_PATH', base_path('app/google/credentials.json'));
+        $tokenPath = $tokenPath ?? env('GOOGLE_TOKEN_PATH', storage_path('app/google/token.json'));
+        $redirectUri = $redirectUri ?? env('GOOGLE_REDIRECT_URI', env('APP_URL') . '/google-callback');
+
+        $instance = new static($credentialsPath, $tokenPath, $redirectUri, $rootFolderId, $projectFolderName);
+
+        // Check authorization
+        if (!$instance->isAuthorized()) {
+            throw new \Exception('Google Drive not authorized. Please authorize first.');
+        }
+
+        return $instance;
+    }
+
+    /**
      * Resolve a storage path to an absolute path
      */
     protected function resolvePath($path)

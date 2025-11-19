@@ -91,33 +91,6 @@ class ApiController extends Controller
     }
 
     /* -------------------------- CREATE ORDER --------------------------- */
-/*     public function create_order(Request $request)
-    {
-        $request->validate(
-            [
-                "customer_id" => "required",
-                "order_type" => "required",
-                "note" => "nullable",
-                "file" => "nullable|file|max:2048|mimes:jpg,jpeg,png",
-            ]
-        );
-
-        $user = $request->user();
-        $order_number = Helper::GenerateUniqueId('Order', 8, 'ORD');
-        $order = new Order();
-        $order->order_number = $order_number;
-        $order->customer_id = $user->customer_id;
-        $order->note = $request->note;
-        $order->image_path = $request->image_path;
-        $order->order_type = $request->order_type;
-        $order->save();
-
-        return response()->json([
-            'error' => false,
-            'message' => 'Order created successfully'
-        ]);
-    } */
-
     public function create_order(Request $request)
     {
         $request->validate([
@@ -127,7 +100,6 @@ class ApiController extends Controller
             "file" => "nullable|file|max:2048|mimes:jpg,jpeg,png",
         ]);
 
-        $user = $request->user();
         $order_number = Helper::GenerateUniqueId('Order', 8, 'ORD');
         $order = new Order();
         $order->order_number = $order_number;
@@ -139,20 +111,8 @@ class ApiController extends Controller
         $image_path = null;
         if ($request->hasFile('file')) {
             try {
-                $uploader = new GoogleImageUpload(
-                    env('GOOGLE_CREDENTIALS_PATH', base_path('app/google/credentials.json')),
-                    env('GOOGLE_TOKEN_PATH', storage_path('app/google/token.json')),
-                    env('GOOGLE_REDIRECT_URI', env('APP_URL') . '/google-callback')
-                );
-
-                if (!$uploader->isAuthorized()) {
-                    return response()->json([
-                        'error' => true,
-                        'message' => 'Google Drive not authorized'
-                    ], 400);
-                }
-
-                $result = $uploader->upload($request->file('file'), 'Uploads/SKP/Orders');
+                $uploader = GoogleImageUpload::gAuthorized();
+                $result = $uploader->upload($request->file('file'), 'Orders');
                 $image_path = $result['preview_url'];
             } catch (\Exception $e) {
                 return response()->json([
